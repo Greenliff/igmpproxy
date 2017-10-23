@@ -122,8 +122,10 @@ void my_log( int Serverity, int Errno, const char *FmtSt, ... );
 #define DEFAULT_RATELIMIT      0
 
 // Define timer constants (in seconds...)
-#define INTERVAL_QUERY          125
-#define INTERVAL_QUERY_RESPONSE  10
+#define INTERVAL_QUERY             125
+#define INTERVAL_STARTUP_QUERY      30
+#define INTERVAL_LAST_MEMBER_QUERY  10
+#define INTERVAL_QUERY_RESPONSE     10
 
 #define ROUTESTATE_NOTJOINED            0   // The group corresponding to route is not joined
 #define ROUTESTATE_JOINED               1   // The group corresponding to route is joined
