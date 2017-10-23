@@ -147,6 +147,44 @@ int loadConfig(char *configFile) {
             // Read next token...
             token = nextConfigToken();
             continue;
+        }
+        else if(strcmp("queryinterval", token)==0) {
+            // Got a queryinterval token...
+            int queryinterval= -1;
+        	token = nextConfigToken();
+            my_log(LOG_DEBUG, 0, "Config: Got queryinterval token '%s'.", token);
+
+        	queryinterval = atoi( token );
+            if(queryinterval < 10) {
+                my_log(LOG_WARNING, 0, "Queryinterval must be >= 10.");
+            }
+            else {
+                commonConfig.queryInterval = queryinterval;
+                commonConfig.startupQueryInterval = MAX(2, MIN(queryinterval / 4, INTERVAL_STARTUP_QUERY));
+                commonConfig.lastMemberQueryInterval = MAX(2, MIN(queryinterval / 4, INTERVAL_LAST_MEMBER_QUERY));
+            }
+
+            // Read next token...
+            token = nextConfigToken();
+            continue;
+        }
+        else if(strcmp("queryrobustness", token)==0) {
+            // Got a queryrobustness token...
+            int queryrobustness= -1;
+        	token = nextConfigToken();
+            my_log(LOG_DEBUG, 0, "Config: Got queryrobustness token '%s'.", token);
+
+            queryrobustness = atoi( token );
+            if(queryrobustness < 0) {
+                my_log(LOG_WARNING, 0, "Queryrobustness must be >= 0.");
+            }
+            else {
+                commonConfig.robustnessValue = queryrobustness;
+            }
+
+            // Read next token...
+            token = nextConfigToken();
+            continue;
         } else {
             // Unparsable token... Exit...
             closeConfigFile();
