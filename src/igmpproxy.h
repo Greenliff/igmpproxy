@@ -124,7 +124,6 @@ void my_log( int Serverity, int Errno, const char *FmtSt, ... );
 // Define timer constants (in seconds...)
 #define INTERVAL_QUERY          125
 #define INTERVAL_QUERY_RESPONSE  10
-//#define INTERVAL_QUERY_RESPONSE  10
 
 #define ROUTESTATE_NOTJOINED            0   // The group corresponding to route is not joined
 #define ROUTESTATE_JOINED               1   // The group corresponding to route is joined
@@ -243,7 +242,8 @@ int leaveMcGroup( int UdpSock, struct IfDesc *IfDp, uint32_t mcastaddr );
  */
 void initRouteTable();
 void clearAllRoutes();
-int insertRoute(uint32_t group, int ifx);
+int insertRoute(uint32_t group, int ifx, uint32_t src);
+void leaveRoute(uint32_t group, int ifx, uint32_t src);
 int activateRoute(uint32_t group, uint32_t originAddr);
 void ageActiveRoutes();
 void setRouteLastMemberMode(uint32_t group);
@@ -261,11 +261,8 @@ typedef void (*timer_f)(void *);
 
 void callout_init();
 void free_all_callouts();
-void age_callout_queue(int);
-int timer_nextTimer();
+void age_callout_queue();
 int timer_setTimer(int, timer_f, void *);
-int timer_clearTimer(int);
-int timer_leftTimer(int);
 
 /* confread.c
  */

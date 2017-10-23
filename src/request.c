@@ -38,8 +38,10 @@
 */
 
 #include "igmpproxy.h"
+#include "time.h"
 
 // Prototypes...
+void doLastMemberDetection(uint32_t group, in_addr_t vifAddr);
 void sendGroupSpecificMemberQuery(void *argument);  
     
 typedef struct {
@@ -82,8 +84,11 @@ void acceptGroupReport(uint32_t src, uint32_t group, uint8_t type) {
         my_log(LOG_DEBUG, 0, "Should insert group %s (from: %s) to route table. Vif Ix : %d",
             inetFmt(group,s1), inetFmt(src,s2), sourceVif->index);
 
+        // TODO add multicast subscriber to route registry
+        // TODO insert source vif (IF not already added)
+
         // The membership report was OK... Insert it into the route table..
-        insertRoute(group, sourceVif->index);
+        insertRoute(group, sourceVif->index, src);
 
 
     } else {
@@ -100,8 +105,8 @@ void acceptGroupReport(uint32_t src, uint32_t group, uint8_t type) {
 void acceptLeaveMessage(uint32_t src, uint32_t group) {
     struct IfDesc   *sourceVif;
     
-    my_log(LOG_DEBUG, 0,
-	    "Got leave message from %s to %s. Starting last member detection.",
+    my_log(LOG_NOTICE, 0,
+	    "Got leave message, from: %s group: %s",
 	    inetFmt(src, s1), inetFmt(group, s2));
 
     // Sanitycheck the group adress...
@@ -121,24 +126,33 @@ void acceptLeaveMessage(uint32_t src, uint32_t group) {
 
     // We have a IF so check that it's an downstream IF.
     if(sourceVif->state == IF_STATE_DOWNSTREAM) {
+        leaveRoute(group, sourceVif->index, src);
 
-        GroupVifDesc   *gvDesc;
-        gvDesc = (GroupVifDesc*) malloc(sizeof(GroupVifDesc));
-
-        // Tell the route table that we are checking for remaining members...
-        setRouteLastMemberMode(group);
-
-        // Call the group spesific membership querier...
-        gvDesc->group = group;
-        gvDesc->vifAddr = sourceVif->InAdr.s_addr;
-        gvDesc->started = 0;
-
-        sendGroupSpecificMemberQuery(gvDesc);
-
+        // TODO shall we do the last member detection also in quickleave/cleanleave mode??
+        doLastMemberDetection(group, sourceVif->InAdr.s_addr);
     } else {
         // just ignore the leave request...
-        my_log(LOG_DEBUG, 0, "The found if for %s was not downstream. Ignoring leave request.", inetFmt(src, s1));
+        my_log(LOG_DEBUG, 0, "Interface for %s is not downstream. Ignoring leave request.", inetFmt(src, s1));
     }
+}
+
+/**
+*   Sends a group specific member report query until the 
+*   group times out...
+*/
+void doLastMemberDetection(uint32_t group, in_addr_t vifAddr) {
+    // TODO is this freed anywhere? Maybe include it in RouteTable entry
+    GroupVifDesc   *gvDesc;
+    gvDesc = (GroupVifDesc*) malloc(sizeof(GroupVifDesc));
+    gvDesc->group = group;
+    gvDesc->vifAddr = vifAddr;
+    gvDesc->started = 0;
+
+    // Tell the route table that we are checking for remaining members...
+    my_log(LOG_WARNING, 0, "Start last member detection for group %s.",
+        inetFmt(group, s1));
+    setRouteLastMemberMode(group);
+    sendGroupSpecificMemberQuery(gvDesc);
 }
 
 /**
@@ -166,7 +180,7 @@ void sendGroupSpecificMemberQuery(void *argument) {
              conf->lastMemberQueryInterval * IGMP_TIMER_SCALE, 
              gvDesc->group, 0);
 
-    my_log(LOG_DEBUG, 0, "Sent membership query from %s to %s. Delay: %d",
+    my_log(LOG_INFO, 0, "Sent membership query from %s to %s. Delay: %d",
         inetFmt(gvDesc->vifAddr,s1), inetFmt(gvDesc->group,s2),
         conf->lastMemberQueryInterval);
 
@@ -183,6 +197,9 @@ void sendGeneralMembershipQuery() {
     struct  Config  *conf = getCommonConfig();
     struct  IfDesc  *Dp;
     int             Ix;
+
+    my_log(LOG_INFO, 0, "\n\n");
+    my_log(LOG_INFO, 0, "-- Trigger general membership query --");
 
     // Loop through all downstream vifs...
     for ( Ix = 0; (Dp = getIfByIx(Ix)); Ix++ ) {
@@ -202,7 +219,7 @@ void sendGeneralMembershipQuery() {
         }
     }
 
-    // Install timer for aging active routes.
+	// Install timer for aging active routes.
     timer_setTimer(conf->queryResponseInterval, ageActiveRoutes, NULL);
 
     // Install timer for next general query...

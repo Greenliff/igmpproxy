@@ -103,6 +103,7 @@ void acceptIgmp(int recvlen) {
     register uint32_t src, dst, group;
     struct ip *ip;
     struct igmp *igmp;
+    struct igmpmsg *igmpmsg;
     int ipdatalen, iphdrlen, igmpdatalen;
 
     if (recvlen < sizeof(struct ip)) {
@@ -111,9 +112,7 @@ void acceptIgmp(int recvlen) {
         return;
     }
 
-    ip        = (struct ip *)recv_buf;
-    src       = ip->ip_src.s_addr;
-    dst       = ip->ip_dst.s_addr;
+    ip = (struct ip *)recv_buf;
 
     /* 
      * this is most likely a message from the kernel indicating that
@@ -121,6 +120,10 @@ void acceptIgmp(int recvlen) {
      * necessary to install a route into the kernel for this.
      */
     if (ip->ip_p == 0) {
+        igmpmsg   = (struct igmpmsg *)recv_buf;
+        src       = igmpmsg->im_src.s_addr;
+        dst       = igmpmsg->im_dst.s_addr;
+
         if (src == 0 || dst == 0) {
             my_log(LOG_WARNING, 0, "kernel request not accurate");
         }
@@ -133,11 +136,13 @@ void acceptIgmp(int recvlen) {
                 my_log(LOG_ERR, 0, "Upstream VIF was null.");
                 return;
             } 
+            // ignore subscribe/leave request we have sent to the upstream interface
             else if(src == checkVIF->InAdr.s_addr) {
                 my_log(LOG_NOTICE, 0, "Route activation request from %s for %s is from myself. Ignoring.",
                     inetFmt(src, s1), inetFmt(dst, s2));
                 return;
             }
+            // check that request comes from configured "altnet for upstream"
             else if(!isAdressValidForIf(checkVIF, src)) {
                 my_log(LOG_WARNING, 0, "The source address %s for group %s, is not in any valid net for upstream VIF.",
                     inetFmt(src, s1), inetFmt(dst, s2));
@@ -145,15 +150,19 @@ void acceptIgmp(int recvlen) {
             }
             
             // Activate the route.
-            my_log(LOG_DEBUG, 0, "Route activate request from %s to %s",
-		    inetFmt(src,s1), inetFmt(dst,s2));
-            activateRoute(dst, src);
-            
-
+            my_log(LOG_DEBUG, 0, "Route activate request from %s to %s, type %u",
+                   inetFmt(src,s1), inetFmt(dst,s2), igmpmsg->im_msgtype);
+            if (igmpmsg->im_msgtype == IGMPMSG_NOCACHE) {
+                // IGMPMSG_NOCACHE indicates that packet for dst has arrived but the
+                // kernel has no forwarding state for that package (freebsd man 4 multicast)
+                activateRoute(dst, src);
+            }
         }
         return;
     }
 
+    src       = ip->ip_src.s_addr;
+    dst       = ip->ip_dst.s_addr;
     iphdrlen  = ip->ip_hl << 2;
     ipdatalen = ip_data_len(ip);
 
@@ -174,7 +183,7 @@ void acceptIgmp(int recvlen) {
         return;
     }
 
-    my_log(LOG_NOTICE, 0, "RECV %s from %-15s to %s",
+    my_log(LOG_NOTICE, 0, "\nRECV %s from %-15s to %s",
         igmpPacketKind(igmp->igmp_type, igmp->igmp_code),
         inetFmt(src, s1), inetFmt(dst, s2) );
 

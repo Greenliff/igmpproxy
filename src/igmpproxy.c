@@ -229,17 +229,11 @@ void igmpProxyRun() {
     //struct Config *config = getCommonConfig();
     // Set some needed values.
     register int recvlen;
-    int     MaxFD, Rt, secs;
+    int     MaxFD, Rt;
     fd_set  ReadFDS;
     socklen_t dummy = 0;
-    struct  timeval  curtime, lasttime, difftime, tv; 
-    // The timeout is a pointer in order to set it to NULL if nessecary.
+    struct  timeval  tv;
     struct  timeval  *timeout = &tv;
-
-    // Initialize timer vars
-    difftime.tv_usec = 0;
-    gettimeofday(&curtime, NULL);
-    lasttime = curtime;
 
     // First thing we send a membership query in downstream VIF's...
     sendGeneralMembershipQuery();
@@ -257,13 +251,8 @@ void igmpProxyRun() {
         }
 
         // Prepare timeout...
-        secs = timer_nextTimer();
-        if(secs == -1) {
-            timeout = NULL;
-        } else {
-            timeout->tv_usec = 0;
-            timeout->tv_sec = secs;
-        }
+        timeout->tv_usec = 0;
+        timeout->tv_sec = 1;
 
         // Prepare for select.
         MaxFD = MRouterFD;
@@ -296,35 +285,7 @@ void igmpProxyRun() {
             }
         }
 
-        // At this point, we can handle timeouts...
-        do {
-            /*
-             * If the select timed out, then there's no other
-             * activity to account for and we don't need to
-             * call gettimeofday.
-             */
-            if (Rt == 0) {
-                curtime.tv_sec = lasttime.tv_sec + secs;
-                curtime.tv_usec = lasttime.tv_usec;
-                Rt = -1; /* don't do this next time through the loop */
-            } else {
-                gettimeofday(&curtime, NULL);
-            }
-            difftime.tv_sec = curtime.tv_sec - lasttime.tv_sec;
-            difftime.tv_usec += curtime.tv_usec - lasttime.tv_usec;
-            while (difftime.tv_usec > 1000000) {
-                difftime.tv_sec++;
-                difftime.tv_usec -= 1000000;
-            }
-            if (difftime.tv_usec < 0) {
-                difftime.tv_sec--;
-                difftime.tv_usec += 1000000;
-            }
-            lasttime = curtime;
-            if (secs == 0 || difftime.tv_sec > 0)
-                age_callout_queue(difftime.tv_sec);
-            secs = -1;
-        } while (difftime.tv_sec > 0);
+        age_callout_queue();
 
     }
 
